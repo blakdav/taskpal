@@ -7,7 +7,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app.py .
 COPY templates/ templates/
 
-ENV TODO_PATH=/data/todo.md
+ENV TASKPAL_PATH=/data/taskpal.md
 EXPOSE 8080
 
 CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "1", "--threads", "4", "app:app"]
