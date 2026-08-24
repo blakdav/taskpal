@@ -27,6 +27,7 @@ Or build on the host instead of pulling:
 | `/delete/<id>`   | POST     | Remove a line                      |
 | `/clear-done`    | POST     | Drop all completed tasks           |
 | `/edit`          | GET/POST | Raw file editor, with mtime guard  |
+| `/task/voice`    | POST     | Audio in, transcribed task out     |
 
 `/task` accepts form-encoded or JSON `{"text": "..."}`, so the browser input
 and an iOS Shortcut can hit the same endpoint.
@@ -50,3 +51,14 @@ an id assigned on next page load.
 | Env            | Default           | Notes                                 |
 |----------------|-------------------|---------------------------------------|
 | `TASKPAL_PATH` | `data/taskpal.md` | Set to `/data/taskpal.md` in the image |
+| `OPENAI_API_KEY` | *(unset)* | Required for `/task/voice` |
+| `TRANSCRIBE_URL` | OpenAI | Point at speaches/LocalAI to go local |
+| `TRANSCRIBE_MODEL` | `gpt-4o-transcribe` | |
+| `TRANSCRIBE_HINT` | *(empty)* | Comma-separated vocabulary hints |
+| `TASKPAL_TOKEN` | *(unset)* | When set, write routes need a bearer token |
+
+## Voice
+
+    curl -X POST http://localhost:8080/task/voice -F file="@memo.m4a"
+
+Returns `{"ok": true, "text": "..."}`. Copy `.env.example` to `.env` first.
