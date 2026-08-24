@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>taskpal <title>edit</title>mdash; edit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #F0F1EC; --surface: #FAFAF8; --ink: #191C18;
+    --muted: #757A70; --accent: #3D5A45; --rule: #DFE0D8;
+    --warn: #8A4B2A;
+    --sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: var(--sans); font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 44rem; margin: 0 auto; padding: 3.5rem 1.25rem 4rem; }
+
+  h1 {
+    font-size: 0.7rem; font-weight: 600; letter-spacing: 0.09em;
+    text-transform: uppercase; color: var(--muted); margin: 0 0 0.85rem;
+  }
+
+  textarea {
+    width: 100%; min-height: 26rem; padding: 1rem;
+    font-family: var(--mono); font-size: 0.85rem; line-height: 1.7;
+    color: var(--ink); background: var(--surface);
+    border: 1px solid var(--rule); border-radius: 3px;
+    outline: none; resize: vertical; tab-size: 2;
+  }
+  textarea:focus { border-color: var(--accent); }
+
+  .bar { display: flex; align-items: center; gap: 1.25rem; margin-top: 1rem; }
+
+  button.save {
+    font: inherit; font-size: 0.85rem; font-weight: 500;
+    padding: 0.5rem 1.1rem; cursor: pointer;
+    color: var(--surface); background: var(--accent);
+    border: 1px solid var(--accent); border-radius: 3px;
+  }
+  button.save:hover { background: var(--ink); border-color: var(--ink); }
+  button.save:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+  a.back { font-size: 0.8rem; color: var(--muted); text-decoration: none; }
+  a.back:hover { color: var(--ink); }
+
+  .conflict {
+    border-left: 2px solid var(--warn);
+    background: var(--surface);
+    padding: 0.9rem 1.1rem;
+    margin-bottom: 1.5rem;
+    font-size: 0.85rem;
+  }
+  .conflict strong { color: var(--warn); display: block; margin-bottom: 0.3rem; }
+  .conflict pre {
+    font-family: var(--mono); font-size: 0.78rem; color: var(--muted);
+    white-space: pre-wrap; margin: 0.7rem 0 0;
+    max-height: 12rem; overflow: auto;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  {% if conflict %}
+  <div class="conflict">
+    <strong>Not saved &mdash; the file changed underneath you</strong>
+    Something else wrote to todo.md after this page loaded. Your text is still
+    in the box below. Merge in anything you need from the current file, then
+    save again.
+    <pre>{{ conflict }}</pre>
+  </div>
+  {% endif %}
+
+  <h1>Raw file</h1>
+
+  <form method="post">
+    <textarea name="content" spellcheck="false" autofocus>{{ content }}</textarea>
+    <input type="hidden" name="mtime" value="{{ mtime }}">
+    <div class="bar">
+      <button class="save" type="submit">Save changes</button>
+      <a class="back" href="{{ url_for('index') }}">back to list</a>
+    </div>
+  </form>
+
+</div>
+</body>
+</html>
