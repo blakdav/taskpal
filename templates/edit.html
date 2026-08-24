@@ -3,18 +3,31 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>taskpal <title>edit</title>mdash; edit</title>
+<title>taskpal &mdash; edit</title>
+<script>
+  try {
+    if (localStorage.getItem('taskpal-theme') === 'light') {
+      document.documentElement.dataset.theme = 'light';
+    }
+  } catch (e) {}
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --paper: #F0F1EC; --surface: #FAFAF8; --ink: #191C18;
-    --muted: #757A70; --accent: #3D5A45; --rule: #DFE0D8;
-    --warn: #8A4B2A;
+    --paper: #171A17; --surface: #1E221E; --ink: #E4E6DF;
+    --muted: #878C81; --accent: #7DA882; --on-accent: #14170F;
+    --rule: #2C312C; --warn: #C98A5E;
     --sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
     --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
   }
+  :root[data-theme="light"] {
+    --paper: #F0F1EC; --surface: #FAFAF8; --ink: #191C18;
+    --muted: #757A70; --accent: #3D5A45; --on-accent: #FAFAF8;
+    --rule: #DFE0D8; --warn: #8A4B2A;
+  }
+
   * { box-sizing: border-box; }
   body {
     margin: 0; background: var(--paper); color: var(--ink);
@@ -42,10 +55,10 @@
   button.save {
     font: inherit; font-size: 0.85rem; font-weight: 500;
     padding: 0.5rem 1.1rem; cursor: pointer;
-    color: var(--surface); background: var(--accent);
+    color: var(--on-accent); background: var(--accent);
     border: 1px solid var(--accent); border-radius: 3px;
   }
-  button.save:hover { background: var(--ink); border-color: var(--ink); }
+  button.save:hover { background: var(--ink); border-color: var(--ink); color: var(--paper); }
   button.save:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
   a.back { font-size: 0.8rem; color: var(--muted); text-decoration: none; }
