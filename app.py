@@ -11,6 +11,7 @@ import os
 import re
 import secrets
 import threading
+from datetime import date
 from pathlib import Path
 from urllib.parse import quote, unquote
 
@@ -24,6 +25,10 @@ TASKPAL_PATH = Path(os.environ.get("TASKPAL_PATH", "data/taskpal.md"))
 # Where voice tasks land, and the home for anything written before the
 # first `##` header.
 INBOX = os.environ.get("TASKPAL_INBOX", "Inbox")
+
+# Completed tasks get moved here rather than deleted. It's a real `##` section
+# in the file, just kept out of the sidebar.
+ARCHIVE = os.environ.get("TASKPAL_ARCHIVE", "Archive")
 
 # --- transcription -----------------------------------------------------
 # Defaults to OpenAI. Point TRANSCRIBE_URL at a local speaches / LocalAI
@@ -52,6 +57,9 @@ TASK_RE = re.compile(
 
 # ## Project name
 HEADER_RE = re.compile(r"^##\s+(?P<name>.+?)\s*$")
+
+# Completion date, Obsidian Tasks style: ✅ 2026-08-24
+DONE_RE = re.compile(r"\s*\u2705\s*(?P<date>\d{4}-\d{2}-\d{2})")
 
 
 def new_id() -> str:
@@ -108,10 +116,16 @@ def parse(content: str):
                        f"{m.group('text').strip()} <!--id:{tid}-->"
             changed = True
 
+        body = m.group("text").strip()
+        d = DONE_RE.search(body)
+        if d:
+            body = DONE_RE.sub("", body).strip()
+
         tasks.append({
             "id": tid,
-            "text": m.group("text").strip(),
+            "text": body,
             "done": m.group("mark").lower() == "x",
+            "done_on": d.group("date") if d else None,
             "project": current,
             "raw": lines[i],
         })
@@ -139,8 +153,13 @@ def project_list(content: str, tasks):
         if t["project"] not in names:
             names.append(t["project"])
 
-    if INBOX not in names:
-        names.insert(0, INBOX)
+    names = [n for n in names if n != ARCHIVE]
+
+    # Inbox is where voice tasks land, so it stays pinned to the top no
+    # matter where its header sits in the file.
+    if INBOX in names:
+        names.remove(INBOX)
+    names.insert(0, INBOX)
 
     counts = {n: 0 for n in names}
     for t in tasks:
@@ -259,7 +278,7 @@ def deny():
 
 # --- views -------------------------------------------------------------
 
-def render(active: str = None):
+def render(active: str = None, archive: bool = False):
     with _lock:
         content = read_file()
         tasks, healed = parse(content)
@@ -272,8 +291,12 @@ def render(active: str = None):
     if active is not None and active not in known:
         active = None  # unknown project -> show everything
 
-    shown = tasks if active is None else [t for t in tasks
-                                          if t["project"] == active]
+    if archive:
+        shown = [t for t in tasks if t["project"] == ARCHIVE]
+    elif active is None:
+        shown = [t for t in tasks if t["project"] != ARCHIVE]
+    else:
+        shown = [t for t in tasks if t["project"] == active]
 
     return render_template(
         "index.html",
@@ -283,6 +306,8 @@ def render(active: str = None):
         active=active,
         total_open=sum(p["open"] for p in projects),
         inbox=INBOX,
+        archive=archive,
+        archived_count=sum(1 for t in tasks if t["project"] == ARCHIVE),
         path=TASKPAL_PATH.name,
     )
 
@@ -501,10 +526,15 @@ def delete(task_id):
     return back_to(request.form.get("return_to"))
 
 
-@app.route("/clear-done", methods=["POST"])
-def clear_done():
-    """Clears completed tasks in the current view only, so clearing Work
-    can't wipe finished items you were keeping under Home."""
+@app.route("/archive-done", methods=["POST"])
+def archive_done():
+    """Move completed tasks into the Archive section, stamped with today's
+    date. Scoped to the current view, so archiving Work leaves finished items
+    under Home alone.
+
+    Nothing is deleted -- the point is that a completed task is a record, and
+    the file is where records belong.
+    """
     if not authorised():
         return deny()
 
@@ -512,23 +542,46 @@ def clear_done():
     if scope == ALL:
         scope = ""
 
+    stamp = date.today().isoformat()
+
     with _lock:
-        lines, kept, current = read_file().splitlines(), [], INBOX
+        lines = read_file().splitlines()
+        kept, moved, current = [], [], INBOX
+
         for line in lines:
             h = HEADER_RE.match(line)
             if h:
                 current = h.group("name")
                 kept.append(line)
                 continue
+
             m = TASK_RE.match(line)
             done = m and m.group("mark").lower() == "x"
             in_scope = (not scope) or current == scope
-            if done and in_scope:
+
+            if done and in_scope and current != ARCHIVE:
+                text = m.group("text").strip()
+                # Don't double-stamp something archived by hand already.
+                if not DONE_RE.search(text):
+                    text = f"{text} \u2705 {stamp}"
+                tid = m.group("id") or new_id()
+                moved.append(f"- [x] {text} <!--id:{tid}-->")
                 continue
+
             kept.append(line)
-        write_file("\n".join(kept) + "\n")
+
+        for entry in moved:
+            insert_line(kept, ARCHIVE, entry)
+
+        if moved:
+            write_file("\n".join(kept) + "\n")
 
     return back_to(request.form.get("return_to"))
+
+
+@app.route("/archive")
+def archive_view():
+    return render(None, archive=True)
 
 
 @app.route("/edit", methods=["GET", "POST"])
