@@ -1,6 +1,6 @@
 # taskpal
 
-Markdown-backed to-do list. `todo.md` on disk is the source of truth; the web
+Markdown-backed to-do list. `taskpal.md` on disk is the source of truth; the web
 page is a render of it. Nothing is ever stored as HTML.
 
 ## Run locally
@@ -47,6 +47,6 @@ an id assigned on next page load.
 
 ## Config
 
-| Env         | Default        | Notes                                |
-|-------------|----------------|--------------------------------------|
-| `TODO_PATH` | `data/todo.md` | Set to `/data/todo.md` in the image  |
+| Env            | Default           | Notes                                 |
+|----------------|-------------------|---------------------------------------|
+| `TASKPAL_PATH` | `data/taskpal.md` | Set to `/data/taskpal.md` in the image |
