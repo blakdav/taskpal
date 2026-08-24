@@ -278,13 +278,33 @@ def deny():
 
 # --- views -------------------------------------------------------------
 
+def hoist_inbox(content: str) -> str:
+    """Move the Inbox section to the top of the file.
+
+    The sidebar pins Inbox first; reordering swaps sections in file order. If
+    the two disagreed, the arrows would move projects past a neighbour that
+    isn't on screen.
+    """
+    preamble, sections = split_sections(content.splitlines())
+    idx = next((i for i, (n, _) in enumerate(sections) if n == INBOX), None)
+    if idx in (None, 0):
+        return content
+    sections.insert(0, sections.pop(idx))
+    return join_sections(preamble, sections)
+
+
 def render(active: str = None, archive: bool = False):
     with _lock:
         content = read_file()
         tasks, healed = parse(content)
         if healed != content:
-            write_file(healed)
             content = healed
+        hoisted = hoist_inbox(content)
+        if hoisted != content:
+            content = hoisted
+        if content != read_file():
+            write_file(content)
+            tasks, _ = parse(content)
 
     projects = project_list(content, tasks)
     known = {p["name"] for p in projects}
