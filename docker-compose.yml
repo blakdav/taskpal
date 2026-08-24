@@ -1,6 +1,6 @@
 services:
   taskpal:
-    image: ghcr.io/blakdav/taskpal:latest
+    image: ghcr.io/blakdav/taskpal.md:latest
     container_name: taskpal
     restart: unless-stopped
     ports:
