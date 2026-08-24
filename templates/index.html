@@ -3,21 +3,42 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#F0F1EC">
 <title>taskpal</title>
+<!-- Set the theme before first paint so light-mode users get no flash. -->
+<script>
+  try {
+    if (localStorage.getItem('taskpal-theme') === 'light') {
+      document.documentElement.dataset.theme = 'light';
+    }
+  } catch (e) {}
+</script>
+<meta name="theme-color" content="#171A17" id="tc">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
+  /* Dark is the default. Light is opt-in via [data-theme="light"]. */
   :root {
+    --paper:   #171A17;
+    --surface: #1E221E;
+    --ink:     #E4E6DF;
+    --muted:   #878C81;
+    --accent:  #7DA882;
+    --on-accent: #14170F;
+    --rule:    #2C312C;
+
+    --sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  :root[data-theme="light"] {
     --paper:   #F0F1EC;
     --surface: #FAFAF8;
     --ink:     #191C18;
     --muted:   #757A70;
     --accent:  #3D5A45;
+    --on-accent: #FAFAF8;
     --rule:    #DFE0D8;
-    --sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
-    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
   }
 
   * { box-sizing: border-box; }
@@ -102,7 +123,8 @@
     border-radius: 2px;
     cursor: pointer;
     font: inherit;
-    color: var(--accent);
+    font-size: 0.7rem;
+    color: var(--on-accent);
     line-height: 1;
     transition: border-color 120ms ease, background 120ms ease;
   }
@@ -165,6 +187,7 @@
     display: flex;
     gap: 1.25rem;
     flex-wrap: wrap;
+    align-items: center;
   }
   footer a, footer button {
     color: var(--muted);
@@ -245,6 +268,7 @@
   <footer>
     <span><kbd>/</kbd> focus</span>
     <button type="button" id="src-toggle"><kbd>s</kbd> source</button>
+    <button type="button" id="theme-toggle"><kbd>t</kbd> <span id="theme-name">light</span></button>
     <a href="{{ url_for('edit') }}">edit raw</a>
     <span style="margin-left:auto">{{ path }}</span>
   </footer>
@@ -253,6 +277,31 @@
 
 <script>
   const input = document.getElementById('add');
+  const root  = document.documentElement;
+  const name  = document.getElementById('theme-name');
+  const meta  = document.getElementById('tc');
+
+  const COLORS = { dark: '#171A17', light: '#F0F1EC' };
+
+  function paintLabel() {
+    const isLight = root.dataset.theme === 'light';
+    name.textContent = isLight ? 'dark' : 'light';   // label = what you'd switch TO
+    meta.setAttribute('content', isLight ? COLORS.light : COLORS.dark);
+  }
+
+  function toggleTheme() {
+    const isLight = root.dataset.theme === 'light';
+    if (isLight) { delete root.dataset.theme; } else { root.dataset.theme = 'light'; }
+    try { localStorage.setItem('taskpal-theme', isLight ? 'dark' : 'light'); } catch (e) {}
+    paintLabel();
+  }
+
+  paintLabel();
+
+  document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+  document.getElementById('src-toggle').addEventListener('click', () => {
+    document.body.classList.toggle('show-source');
+  });
 
   document.addEventListener('keydown', (e) => {
     if (e.target.matches('input, textarea')) return;
@@ -260,10 +309,7 @@
 
     if (e.key === '/') { e.preventDefault(); input.focus(); }
     if (e.key === 's') { document.body.classList.toggle('show-source'); }
-  });
-
-  document.getElementById('src-toggle').addEventListener('click', () => {
-    document.body.classList.toggle('show-source');
+    if (e.key === 't') { toggleTheme(); }
   });
 </script>
 </body>
