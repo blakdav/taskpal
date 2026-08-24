@@ -43,6 +43,7 @@ an id assigned on next page load.
 
 - `/` focus the input
 - `s` show the raw markdown behind the page
+- `t` switch dark / light (dark is the default; choice is remembered)
 
 ## Config
 
