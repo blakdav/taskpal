@@ -55,7 +55,7 @@
     margin: 0 auto;
     padding: 3.5rem 1.25rem 6rem;
     display: grid;
-    grid-template-columns: 11.5rem 1fr;
+    grid-template-columns: 12.5rem 1fr;
     gap: 2.5rem;
     align-items: start;
   }
@@ -106,13 +106,13 @@
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
 
-  .ord { display: flex; flex-direction: column; gap: 1px; opacity: 0.25; transition: opacity 120ms ease; }
+  .ord { display: flex; flex-direction: column; gap: 2px; opacity: 0.35; transition: opacity 120ms ease; }
   nav .row:hover .ord, .ord:focus-within { opacity: 1; }
   .ord button {
     display: flex; align-items: center; justify-content: center;
-    width: 1.4rem; height: 1.05rem;
+    width: 1.9rem; height: 1.35rem;
     border: 0; background: none; cursor: pointer;
-    color: var(--muted); font-size: 0.8rem; line-height: 1;
+    color: var(--muted); font-size: 1.05rem; line-height: 1;
     border-radius: 2px;
     padding: 0;
   }
@@ -372,16 +372,18 @@
            class="{{ 'on' if active == p.name }}">
           <span>{{ p.name }}</span><span class="n">{{ p.open or '' }}</span>
         </a>
+        {% if p.name != inbox %}
         <span class="ord">
           <form method="post" action="{{ url_for('reorder_project', project=p.name, direction='up') }}">
             <button type="submit" aria-label="Move {{ p.name }} up"
-              {{ 'disabled' if loop.first }}>&uarr;</button>
+              {{ 'disabled' if loop.index0 == 1 }}>&uarr;</button>
           </form>
           <form method="post" action="{{ url_for('reorder_project', project=p.name, direction='down') }}">
             <button type="submit" aria-label="Move {{ p.name }} down"
               {{ 'disabled' if loop.last }}>&darr;</button>
           </form>
         </span>
+        {% endif %}
       </div>
       {% endfor %}
       <div class="row all-row">
