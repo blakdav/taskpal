@@ -16,7 +16,7 @@ from flask import Flask, redirect, render_template, request, url_for
 
 app = Flask(__name__)
 
-TODO_PATH = Path(os.environ.get("TODO_PATH", "data/todo.md"))
+TASKPAL_PATH = Path(os.environ.get("TASKPAL_PATH", "data/taskpal.md"))
 
 # Serialises this app's own writes. Does NOT protect against other processes
 # editing the file -- that's what the mtime guard on /edit is for.
@@ -35,23 +35,23 @@ def new_id() -> str:
 
 
 def ensure_file() -> None:
-    TODO_PATH.parent.mkdir(parents=True, exist_ok=True)
-    if not TODO_PATH.exists():
-        TODO_PATH.write_text("# To do\n\n", encoding="utf-8")
+    TASKPAL_PATH.parent.mkdir(parents=True, exist_ok=True)
+    if not TASKPAL_PATH.exists():
+        TASKPAL_PATH.write_text("# To do\n\n", encoding="utf-8")
 
 
 def read_file() -> str:
     ensure_file()
-    return TODO_PATH.read_text(encoding="utf-8")
+    return TASKPAL_PATH.read_text(encoding="utf-8")
 
 
 def write_file(content: str) -> None:
     """Atomic-ish write: temp file then rename, so a crash mid-write
     can't leave you with a truncated list."""
     ensure_file()
-    tmp = TODO_PATH.with_suffix(".md.tmp")
+    tmp = TASKPAL_PATH.with_suffix(".md.tmp")
     tmp.write_text(content, encoding="utf-8")
-    tmp.replace(TODO_PATH)
+    tmp.replace(TASKPAL_PATH)
 
 
 def parse(content: str):
@@ -97,7 +97,7 @@ def index():
         "index.html",
         open_tasks=[t for t in tasks if not t["done"]],
         done_tasks=[t for t in tasks if t["done"]],
-        path=TODO_PATH.name,
+        path=TASKPAL_PATH.name,
     )
 
 
@@ -168,7 +168,7 @@ def edit():
     if request.method == "POST":
         seen_mtime = float(request.form.get("mtime", 0))
         with _lock:
-            current_mtime = TODO_PATH.stat().st_mtime
+            current_mtime = TASKPAL_PATH.stat().st_mtime
             # Someone else wrote to the file since this page was served.
             # Refuse rather than clobber their work.
             if abs(current_mtime - seen_mtime) > 0.001:
@@ -184,7 +184,7 @@ def edit():
     return render_template(
         "edit.html",
         content=read_file(),
-        mtime=TODO_PATH.stat().st_mtime,
+        mtime=TASKPAL_PATH.stat().st_mtime,
         conflict=None,
     )
 
