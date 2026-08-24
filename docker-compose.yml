@@ -6,4 +6,4 @@ services:
     ports:
       - "8092:8080"
     volumes:
-      - /opt/docker/taskpal/data:/data
+      - volumemap:/data
