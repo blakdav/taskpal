@@ -1,0 +1,9 @@
+services:
+  taskpal:
+    image: ghcr.io/blakdav/taskpal:latest
+    container_name: taskpal
+    restart: unless-stopped
+    ports:
+      - "8092:8080"
+    volumes:
+      - /opt/docker/taskpal/data:/data
