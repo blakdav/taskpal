@@ -4,7 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>taskpal</title>
-<!-- Set the theme before first paint so light-mode users get no flash. -->
 <script>
   try {
     if (localStorage.getItem('taskpal-theme') === 'light') {
@@ -26,11 +25,9 @@
     --accent:  #7DA882;
     --on-accent: #14170F;
     --rule:    #2C312C;
-
     --sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
     --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
   }
-
   :root[data-theme="light"] {
     --paper:   #F0F1EC;
     --surface: #FAFAF8;
@@ -53,15 +50,74 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  .wrap {
-    max-width: 34rem;
+  .shell {
+    max-width: 48rem;
     margin: 0 auto;
     padding: 3.5rem 1.25rem 6rem;
+    display: grid;
+    grid-template-columns: 10.5rem 1fr;
+    gap: 2.5rem;
+    align-items: start;
   }
 
-  /* ---- capture box: the hero. everything else stays quiet ---- */
-  .capture { position: relative; margin-bottom: 2.5rem; }
+  /* ---- sidebar ---- */
+  nav { position: sticky; top: 3.5rem; }
 
+  .nav-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 0 0.5rem;
+    margin-bottom: 0.6rem;
+  }
+
+  nav a {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.5rem;
+    padding: 0.3rem 0.5rem;
+    border-radius: 3px;
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 0.85rem;
+    border-left: 2px solid transparent;
+    transition: color 120ms ease, background 120ms ease;
+  }
+  nav a:hover { color: var(--ink); background: var(--surface); }
+  nav a.on {
+    color: var(--ink);
+    background: var(--surface);
+    border-left-color: var(--accent);
+    font-weight: 500;
+  }
+  nav a .n {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+  nav a.on .n { color: var(--accent); }
+
+  nav hr { border: 0; border-top: 1px solid var(--rule); margin: 0.6rem 0.5rem; }
+
+  #newproj {
+    width: 100%;
+    padding: 0.3rem 0.5rem;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--ink);
+    background: transparent;
+    border: 1px dashed var(--rule);
+    border-radius: 3px;
+    outline: none;
+  }
+  #newproj:focus { border-style: solid; border-color: var(--accent); }
+  #newproj::placeholder { color: var(--muted); }
+
+  /* ---- capture box: the hero ---- */
+  .capture { position: relative; margin-bottom: 2rem; }
   .capture input {
     width: 100%;
     padding: 0.9rem 1rem 0.9rem 2.1rem;
@@ -76,12 +132,10 @@
   }
   .capture input::placeholder { color: var(--muted); }
   .capture input:focus { border-color: var(--accent); }
-
   .capture::before {
     content: "-";
     position: absolute;
-    left: 1rem;
-    top: 50%;
+    left: 1rem; top: 50%;
     transform: translateY(-50%);
     font-family: var(--mono);
     color: var(--muted);
@@ -95,14 +149,13 @@
     letter-spacing: 0.09em;
     text-transform: uppercase;
     color: var(--muted);
-    margin: 2.5rem 0 0.85rem;
+    margin: 2.25rem 0 0.85rem;
     display: flex;
     justify-content: space-between;
     align-items: baseline;
   }
 
   ul.tasks { list-style: none; margin: 0; padding: 0; }
-
   ul.tasks li {
     display: flex;
     align-items: flex-start;
@@ -115,15 +168,13 @@
   .box {
     flex: none;
     margin-top: 0.15rem;
-    width: 1rem;
-    height: 1rem;
+    width: 1rem; height: 1rem;
     padding: 0;
     background: var(--surface);
     border: 1px solid var(--muted);
     border-radius: 2px;
     cursor: pointer;
-    font: inherit;
-    font-size: 0.7rem;
+    font: inherit; font-size: 0.7rem;
     color: var(--on-accent);
     line-height: 1;
     transition: border-color 120ms ease, background 120ms ease;
@@ -132,27 +183,51 @@
   .box:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .box.checked { background: var(--accent); border-color: var(--accent); }
 
-  .label {
-    flex: 1;
-    font-family: var(--mono);
-    font-size: 0.9rem;
-    word-break: break-word;
-  }
+  .label { flex: 1; font-family: var(--mono); font-size: 0.9rem; word-break: break-word; }
   li.done .label { color: var(--muted); text-decoration: line-through; }
+
+  /* project chip shown only in the All view, where it's the only way to
+     tell which section a task came from */
+  .tag {
+    flex: none;
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    color: var(--muted);
+    padding: 0.05rem 0.35rem;
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    margin-top: 0.1rem;
+  }
+
+  select.mover {
+    flex: none;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    padding: 0.1rem 0.15rem;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 120ms ease, color 120ms ease;
+  }
+  ul.tasks li:hover select.mover,
+  select.mover:focus { opacity: 1; }
+  select.mover:hover { color: var(--ink); border-color: var(--rule); }
+  select.mover option { background: var(--surface); color: var(--ink); }
 
   .kill {
     flex: none;
-    border: 0;
-    background: none;
-    color: var(--rule);
-    font: inherit;
-    cursor: pointer;
+    border: 0; background: none;
+    color: transparent;
+    font: inherit; cursor: pointer;
     padding: 0 0.2rem;
     transition: color 120ms ease;
   }
   ul.tasks li:hover .kill { color: var(--muted); }
   .kill:hover { color: var(--ink); }
-  .kill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .kill:focus-visible { color: var(--muted); outline: 2px solid var(--accent); }
 
   .empty {
     font-family: var(--mono);
@@ -162,7 +237,6 @@
     border-top: 1px solid var(--rule);
   }
 
-  /* ---- signature: the file behind the page ---- */
   #source {
     display: none;
     margin-top: 2.5rem;
@@ -192,11 +266,8 @@
   footer a, footer button {
     color: var(--muted);
     text-decoration: none;
-    border: 0;
-    background: none;
-    padding: 0;
-    font: inherit;
-    cursor: pointer;
+    border: 0; background: none; padding: 0;
+    font: inherit; cursor: pointer;
   }
   footer a:hover, footer button:hover { color: var(--ink); }
   kbd {
@@ -208,70 +279,140 @@
     background: var(--surface);
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    * { transition: none !important; }
+  /* On narrow screens the sidebar becomes a scrollable strip on top --
+     a 10rem column would eat half a phone. */
+  @media (max-width: 40rem) {
+    .shell {
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+      padding-top: 2rem;
+    }
+    nav { position: static; }
+    .nav-label, nav hr { display: none; }
+    nav .rail {
+      display: flex;
+      gap: 0.4rem;
+      overflow-x: auto;
+      padding-bottom: 0.35rem;
+      scrollbar-width: none;
+    }
+    nav .rail::-webkit-scrollbar { display: none; }
+    nav a {
+      flex: none;
+      border-left: 0;
+      border-bottom: 2px solid transparent;
+      border-radius: 3px 3px 0 0;
+      white-space: nowrap;
+    }
+    nav a.on { border-left: 0; border-bottom-color: var(--accent); }
+    #newproj { margin-top: 0.5rem; }
+    select.mover { opacity: 1; }
+    .kill { color: var(--muted); }
   }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="shell">
 
-  <form class="capture" method="post" action="{{ url_for('add_task') }}">
-    <input id="add" name="text" autocomplete="off" autofocus
-           placeholder="add a task, press enter">
-  </form>
-
-  {% if open_tasks %}
-  <ul class="tasks">
-    {% for t in open_tasks %}
-    <li>
-      <form method="post" action="{{ url_for('toggle', task_id=t.id) }}">
-        <button class="box" type="submit" aria-label="Complete {{ t.text }}"></button>
-      </form>
-      <span class="label">{{ t.text }}</span>
-      <form method="post" action="{{ url_for('delete', task_id=t.id) }}">
-        <button class="kill" type="submit" aria-label="Delete {{ t.text }}">&times;</button>
-      </form>
-    </li>
-    {% endfor %}
-  </ul>
-  {% else %}
-  <p class="empty">Nothing open. Type above to add the first task.</p>
-  {% endif %}
-
-  {% if done_tasks %}
-  <div class="section-label">
-    <span>Done &middot; {{ done_tasks|length }}</span>
-    <form method="post" action="{{ url_for('clear_done') }}">
-      <button class="kill" type="submit" style="color:var(--muted)">clear</button>
+  <nav>
+    <div class="nav-label">Projects</div>
+    <div class="rail">
+      <a href="{{ url_for('index') }}" class="{{ 'on' if active is none }}">
+        <span>All</span><span class="n">{{ total_open }}</span>
+      </a>
+      {% for p in projects %}
+      <a href="{{ url_for('project_view', project=p.name) }}"
+         class="{{ 'on' if active == p.name }}">
+        <span>{{ p.name }}</span><span class="n">{{ p.open or '' }}</span>
+      </a>
+      {% endfor %}
+    </div>
+    <hr>
+    <form method="post" action="{{ url_for('add_project') }}">
+      <input id="newproj" name="name" autocomplete="off" placeholder="+ project">
     </form>
-  </div>
-  <ul class="tasks">
-    {% for t in done_tasks %}
-    <li class="done">
-      <form method="post" action="{{ url_for('toggle', task_id=t.id) }}">
-        <button class="box checked" type="submit" aria-label="Reopen {{ t.text }}">&check;</button>
-      </form>
-      <span class="label">{{ t.text }}</span>
-      <form method="post" action="{{ url_for('delete', task_id=t.id) }}">
-        <button class="kill" type="submit" aria-label="Delete {{ t.text }}">&times;</button>
-      </form>
-    </li>
-    {% endfor %}
-  </ul>
-  {% endif %}
+  </nav>
 
-  <pre id="source">{% for t in open_tasks %}{{ t.raw }}
+  <main>
+    <form class="capture" method="post" action="{{ url_for('add_task') }}">
+      <input id="add" name="text" autocomplete="off"
+             placeholder="add to {{ active or inbox }}, press enter">
+      <input type="hidden" name="project" value="{{ active or inbox }}">
+      <input type="hidden" name="return_to" value="{{ active or '' }}">
+    </form>
+
+    {% if open_tasks %}
+    <ul class="tasks">
+      {% for t in open_tasks %}
+      <li>
+        <form method="post" action="{{ url_for('toggle', task_id=t.id) }}">
+          <input type="hidden" name="return_to" value="{{ active or '' }}">
+          <button class="box" type="submit" aria-label="Complete {{ t.text }}"></button>
+        </form>
+        <span class="label">{{ t.text }}</span>
+        {% if active is none %}<span class="tag">{{ t.project }}</span>{% endif %}
+        <form method="post" action="{{ url_for('move', task_id=t.id) }}">
+          <input type="hidden" name="return_to" value="{{ active or '' }}">
+          <select class="mover" name="project" aria-label="Move {{ t.text }}"
+                  onchange="this.form.submit()">
+            <option value="" selected>&rarr;</option>
+            {% for p in projects if p.name != t.project %}
+            <option value="{{ p.name }}">{{ p.name }}</option>
+            {% endfor %}
+          </select>
+        </form>
+        <form method="post" action="{{ url_for('delete', task_id=t.id) }}">
+          <input type="hidden" name="return_to" value="{{ active or '' }}">
+          <button class="kill" type="submit" aria-label="Delete {{ t.text }}">&times;</button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="empty">Nothing open{{ ' in ' ~ active if active }}. Type above to add.</p>
+    {% endif %}
+
+    {% if done_tasks %}
+    <div class="section-label">
+      <span>Done &middot; {{ done_tasks|length }}</span>
+      <form method="post" action="{{ url_for('clear_done') }}">
+        <input type="hidden" name="return_to" value="{{ active or '' }}">
+        <button class="kill" type="submit" style="color:var(--muted)">clear</button>
+      </form>
+    </div>
+    <ul class="tasks">
+      {% for t in done_tasks %}
+      <li class="done">
+        <form method="post" action="{{ url_for('toggle', task_id=t.id) }}">
+          <input type="hidden" name="return_to" value="{{ active or '' }}">
+          <button class="box checked" type="submit" aria-label="Reopen {{ t.text }}">&check;</button>
+        </form>
+        <span class="label">{{ t.text }}</span>
+        {% if active is none %}<span class="tag">{{ t.project }}</span>{% endif %}
+        <form method="post" action="{{ url_for('delete', task_id=t.id) }}">
+          <input type="hidden" name="return_to" value="{{ active or '' }}">
+          <button class="kill" type="submit" aria-label="Delete {{ t.text }}">&times;</button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    <pre id="source">{% for t in open_tasks %}{{ t.raw }}
 {% endfor %}{% for t in done_tasks %}{{ t.raw }}
 {% endfor %}</pre>
 
-  <footer>
-    <span><kbd>/</kbd> focus</span>
-    <button type="button" id="src-toggle"><kbd>s</kbd> source</button>
-    <button type="button" id="theme-toggle"><kbd>t</kbd> <span id="theme-name">light</span></button>
-    <a href="{{ url_for('edit') }}">edit raw</a>
-    <span style="margin-left:auto">{{ path }}</span>
-  </footer>
+    <footer>
+      <span><kbd>/</kbd> focus</span>
+      <span><kbd>1-9</kbd> project</span>
+      <button type="button" id="src-toggle"><kbd>s</kbd> source</button>
+      <button type="button" id="theme-toggle"><kbd>t</kbd> <span id="theme-name">light</span></button>
+      <a href="{{ url_for('edit') }}">edit raw</a>
+      <span style="margin-left:auto">{{ path }}</span>
+    </footer>
+  </main>
 
 </div>
 
@@ -280,22 +421,19 @@
   const root  = document.documentElement;
   const name  = document.getElementById('theme-name');
   const meta  = document.getElementById('tc');
-
   const COLORS = { dark: '#171A17', light: '#F0F1EC' };
 
   function paintLabel() {
     const isLight = root.dataset.theme === 'light';
-    name.textContent = isLight ? 'dark' : 'light';   // label = what you'd switch TO
+    name.textContent = isLight ? 'dark' : 'light';
     meta.setAttribute('content', isLight ? COLORS.light : COLORS.dark);
   }
-
   function toggleTheme() {
     const isLight = root.dataset.theme === 'light';
     if (isLight) { delete root.dataset.theme; } else { root.dataset.theme = 'light'; }
     try { localStorage.setItem('taskpal-theme', isLight ? 'dark' : 'light'); } catch (e) {}
     paintLabel();
   }
-
   paintLabel();
 
   document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
@@ -303,13 +441,28 @@
     document.body.classList.toggle('show-source');
   });
 
+  const links = Array.from(document.querySelectorAll('nav .rail a'));
+
   document.addEventListener('keydown', (e) => {
-    if (e.target.matches('input, textarea')) return;
+    if (e.target.matches('input, textarea, select')) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
 
     if (e.key === '/') { e.preventDefault(); input.focus(); }
     if (e.key === 's') { document.body.classList.toggle('show-source'); }
     if (e.key === 't') { toggleTheme(); }
+
+    // 1 = All, 2..9 = the projects in sidebar order
+    if (/^[1-9]$/.test(e.key)) {
+      const target = links[Number(e.key) - 1];
+      if (target) { e.preventDefault(); window.location = target.href; }
+    }
+  });
+
+  // Coming back to a tab that's been sitting open? Get fresh state.
+  let hidden = false;
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { hidden = true; }
+    else if (hidden) { window.location.reload(); }
   });
 </script>
 </body>
