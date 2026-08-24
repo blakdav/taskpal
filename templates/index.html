@@ -100,6 +100,23 @@
   }
   nav a.on .n { color: var(--accent); }
 
+  nav .row { display: flex; align-items: center; }
+  nav .row a { flex: 1; min-width: 0; }
+  nav .row a span:first-child {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  .ord { display: flex; flex-direction: column; opacity: 0; transition: opacity 120ms ease; }
+  nav .row:hover .ord, .ord:focus-within { opacity: 1; }
+  .ord button {
+    border: 0; background: none; cursor: pointer;
+    color: var(--muted); font-size: 0.6rem; line-height: 0.9;
+    padding: 0 0.15rem;
+  }
+  .ord button:hover:not(:disabled) { color: var(--ink); }
+  .ord button:disabled { color: var(--rule); cursor: default; }
+  .ord button:focus-visible { outline: 1px solid var(--accent); }
+
   nav hr { border: 0; border-top: 1px solid var(--rule); margin: 0.6rem 0.5rem; }
 
   #newproj {
@@ -297,6 +314,8 @@
       scrollbar-width: none;
     }
     nav .rail::-webkit-scrollbar { display: none; }
+    nav .row { flex: none; }
+    .ord { display: none; }
     nav a {
       flex: none;
       border-left: 0;
@@ -319,14 +338,28 @@
   <nav>
     <div class="nav-label">Projects</div>
     <div class="rail">
-      <a href="{{ url_for('index') }}" class="{{ 'on' if active is none }}">
-        <span>All</span><span class="n">{{ total_open }}</span>
-      </a>
+      <div class="row">
+        <a href="{{ url_for('all_view') }}" class="{{ 'on' if active is none }}">
+          <span>All</span><span class="n">{{ total_open }}</span>
+        </a>
+      </div>
       {% for p in projects %}
-      <a href="{{ url_for('project_view', project=p.name) }}"
-         class="{{ 'on' if active == p.name }}">
-        <span>{{ p.name }}</span><span class="n">{{ p.open or '' }}</span>
-      </a>
+      <div class="row">
+        <a href="{{ url_for('project_view', project=p.name) }}"
+           class="{{ 'on' if active == p.name }}">
+          <span>{{ p.name }}</span><span class="n">{{ p.open or '' }}</span>
+        </a>
+        <span class="ord">
+          <form method="post" action="{{ url_for('reorder_project', project=p.name, direction='up') }}">
+            <button type="submit" aria-label="Move {{ p.name }} up"
+              {{ 'disabled' if loop.first }}>&uarr;</button>
+          </form>
+          <form method="post" action="{{ url_for('reorder_project', project=p.name, direction='down') }}">
+            <button type="submit" aria-label="Move {{ p.name }} down"
+              {{ 'disabled' if loop.last }}>&darr;</button>
+          </form>
+        </span>
+      </div>
       {% endfor %}
     </div>
     <hr>
@@ -340,7 +373,7 @@
       <input id="add" name="text" autocomplete="off"
              placeholder="add to {{ active or inbox }}, press enter">
       <input type="hidden" name="project" value="{{ active or inbox }}">
-      <input type="hidden" name="return_to" value="{{ active or '' }}">
+      <input type="hidden" name="return_to" value="{{ active or '*' }}">
     </form>
 
     {% if open_tasks %}
@@ -348,13 +381,13 @@
       {% for t in open_tasks %}
       <li>
         <form method="post" action="{{ url_for('toggle', task_id=t.id) }}">
-          <input type="hidden" name="return_to" value="{{ active or '' }}">
+          <input type="hidden" name="return_to" value="{{ active or '*' }}">
           <button class="box" type="submit" aria-label="Complete {{ t.text }}"></button>
         </form>
         <span class="label">{{ t.text }}</span>
         {% if active is none %}<span class="tag">{{ t.project }}</span>{% endif %}
         <form method="post" action="{{ url_for('move', task_id=t.id) }}">
-          <input type="hidden" name="return_to" value="{{ active or '' }}">
+          <input type="hidden" name="return_to" value="{{ active or '*' }}">
           <select class="mover" name="project" aria-label="Move {{ t.text }}"
                   onchange="this.form.submit()">
             <option value="" selected>&rarr;</option>
@@ -364,7 +397,7 @@
           </select>
         </form>
         <form method="post" action="{{ url_for('delete', task_id=t.id) }}">
-          <input type="hidden" name="return_to" value="{{ active or '' }}">
+          <input type="hidden" name="return_to" value="{{ active or '*' }}">
           <button class="kill" type="submit" aria-label="Delete {{ t.text }}">&times;</button>
         </form>
       </li>
@@ -378,7 +411,7 @@
     <div class="section-label">
       <span>Done &middot; {{ done_tasks|length }}</span>
       <form method="post" action="{{ url_for('clear_done') }}">
-        <input type="hidden" name="return_to" value="{{ active or '' }}">
+        <input type="hidden" name="return_to" value="{{ active or '*' }}">
         <button class="kill" type="submit" style="color:var(--muted)">clear</button>
       </form>
     </div>
@@ -386,13 +419,13 @@
       {% for t in done_tasks %}
       <li class="done">
         <form method="post" action="{{ url_for('toggle', task_id=t.id) }}">
-          <input type="hidden" name="return_to" value="{{ active or '' }}">
+          <input type="hidden" name="return_to" value="{{ active or '*' }}">
           <button class="box checked" type="submit" aria-label="Reopen {{ t.text }}">&check;</button>
         </form>
         <span class="label">{{ t.text }}</span>
         {% if active is none %}<span class="tag">{{ t.project }}</span>{% endif %}
         <form method="post" action="{{ url_for('delete', task_id=t.id) }}">
-          <input type="hidden" name="return_to" value="{{ active or '' }}">
+          <input type="hidden" name="return_to" value="{{ active or '*' }}">
           <button class="kill" type="submit" aria-label="Delete {{ t.text }}">&times;</button>
         </form>
       </li>
@@ -441,7 +474,7 @@
     document.body.classList.toggle('show-source');
   });
 
-  const links = Array.from(document.querySelectorAll('nav .rail a'));
+  const links = Array.from(document.querySelectorAll('nav .rail .row > a'));
 
   document.addEventListener('keydown', (e) => {
     if (e.target.matches('input, textarea, select')) return;
