@@ -1,9 +1,10 @@
 """
-Markdown-backed to-do list.
+Markdown-backed to-do list with projects.
 
-The file on disk is the source of truth. Every request does a
-read-modify-write against it, so Obsidian / vim / Syncthing can touch the
-same file without this app losing their changes.
+The file on disk is the source of truth. `##` headers are projects; tasks
+belong to whichever header precedes them. Anything before the first header
+lands in Inbox. Every request does a read-modify-write, so Obsidian / vim /
+Syncthing can touch the same file without this app losing their changes.
 """
 
 import os
@@ -11,6 +12,7 @@ import re
 import secrets
 import threading
 from pathlib import Path
+from urllib.parse import quote, unquote
 
 import requests
 from flask import Flask, jsonify, redirect, render_template, request, url_for
@@ -18,6 +20,10 @@ from flask import Flask, jsonify, redirect, render_template, request, url_for
 app = Flask(__name__)
 
 TASKPAL_PATH = Path(os.environ.get("TASKPAL_PATH", "data/taskpal.md"))
+
+# Where voice tasks land, and the home for anything written before the
+# first `##` header.
+INBOX = os.environ.get("TASKPAL_INBOX", "Inbox")
 
 # --- transcription -----------------------------------------------------
 # Defaults to OpenAI. Point TRANSCRIBE_URL at a local speaches / LocalAI
@@ -27,8 +33,6 @@ TRANSCRIBE_URL = os.environ.get(
 )
 TRANSCRIBE_MODEL = os.environ.get("TRANSCRIBE_MODEL", "gpt-4o-transcribe")
 TRANSCRIBE_KEY = os.environ.get("OPENAI_API_KEY", "")
-# Comma-separated words to bias the recogniser toward. Names, jargon, and
-# anything it reliably mangles.
 TRANSCRIBE_HINT = os.environ.get("TRANSCRIBE_HINT", "")
 
 # Optional shared secret. When set, write routes require
@@ -37,8 +41,6 @@ TASKPAL_TOKEN = os.environ.get("TASKPAL_TOKEN", "")
 
 MAX_AUDIO_BYTES = 25 * 1024 * 1024  # OpenAI's per-request ceiling
 
-# Serialises this app's own writes. Does NOT protect against other processes
-# editing the file -- that's what the mtime guard on /edit is for.
 _lock = threading.Lock()
 
 # - [ ] Some task <!--id:a3f2c1-->
@@ -48,15 +50,20 @@ TASK_RE = re.compile(
     r"(?:\s*<!--id:(?P<id>[0-9a-f]{6})-->)?\s*$"
 )
 
+# ## Project name
+HEADER_RE = re.compile(r"^##\s+(?P<name>.+?)\s*$")
+
 
 def new_id() -> str:
     return secrets.token_hex(3)
 
 
+# --- file io -----------------------------------------------------------
+
 def ensure_file() -> None:
     TASKPAL_PATH.parent.mkdir(parents=True, exist_ok=True)
     if not TASKPAL_PATH.exists():
-        TASKPAL_PATH.write_text("# To do\n\n", encoding="utf-8")
+        TASKPAL_PATH.write_text(f"# To do\n\n## {INBOX}\n\n", encoding="utf-8")
 
 
 def read_file() -> str:
@@ -73,15 +80,23 @@ def write_file(content: str) -> None:
     tmp.replace(TASKPAL_PATH)
 
 
+# --- parsing -----------------------------------------------------------
+
 def parse(content: str):
     """Return (tasks, healed_content).
 
-    Any task line missing an id gets one assigned, so tasks you add by hand
-    in Obsidian become clickable here.
+    Each task carries the project it sits under. Tasks missing an id get one
+    assigned, so items added by hand in Obsidian become clickable here.
     """
     tasks, lines, changed = [], content.splitlines(), False
+    current = INBOX
 
     for i, line in enumerate(lines):
+        h = HEADER_RE.match(line)
+        if h:
+            current = h.group("name")
+            continue
+
         m = TASK_RE.match(line)
         if not m or not m.group("text").strip():
             continue
@@ -97,6 +112,7 @@ def parse(content: str):
             "id": tid,
             "text": m.group("text").strip(),
             "done": m.group("mark").lower() == "x",
+            "project": current,
             "raw": lines[i],
         })
 
@@ -104,32 +120,92 @@ def parse(content: str):
     return tasks, healed
 
 
-@app.route("/")
-def index():
-    with _lock:
-        content = read_file()
-        tasks, healed = parse(content)
-        if healed != content:
-            write_file(healed)
+def project_list(content: str, tasks):
+    """Ordered project names with open-task counts.
 
-    return render_template(
-        "index.html",
-        open_tasks=[t for t in tasks if not t["done"]],
-        done_tasks=[t for t in tasks if t["done"]],
-        path=TASKPAL_PATH.name,
-    )
+    Order follows the file, so rearranging headers in Obsidian rearranges the
+    sidebar. Empty projects still appear -- a project you just made shouldn't
+    vanish because you haven't filled it yet.
+    """
+    names = []
+    for line in content.splitlines():
+        h = HEADER_RE.match(line)
+        if h and h.group("name") not in names:
+            names.append(h.group("name"))
+
+    # Tasks sitting above the first header, or under a header that has since
+    # been deleted.
+    for t in tasks:
+        if t["project"] not in names:
+            names.append(t["project"])
+
+    if INBOX not in names:
+        names.insert(0, INBOX)
+
+    counts = {n: 0 for n in names}
+    for t in tasks:
+        if not t["done"]:
+            counts[t["project"]] = counts.get(t["project"], 0) + 1
+
+    return [{"name": n, "open": counts.get(n, 0)} for n in names]
 
 
-def append_task(text: str) -> str:
-    """Append one task line. Returns its id. The single write path -- typed
-    input and voice input both land here."""
+# --- mutation ----------------------------------------------------------
+
+def section_bounds(lines, project: str):
+    """(start, end) line indices for a project's body, or None.
+
+    `start` is the line after the header; `end` is one past the last line
+    that belongs to the section.
+    """
+    start = None
+    for i, line in enumerate(lines):
+        h = HEADER_RE.match(line)
+        if h and h.group("name") == project:
+            start = i + 1
+            break
+    if start is None:
+        return None
+
+    end = len(lines)
+    for j in range(start, len(lines)):
+        if HEADER_RE.match(lines[j]):
+            end = j
+            break
+
+    # Don't count trailing blank lines as part of the section.
+    while end > start and not lines[end - 1].strip():
+        end -= 1
+
+    return start, end
+
+
+def insert_line(lines, project: str, line: str):
+    """Put `line` at the end of a project's section, creating it if needed."""
+    bounds = section_bounds(lines, project)
+    if bounds is None:
+        if lines and lines[-1].strip():
+            lines.append("")
+        lines.append(f"## {project}")
+        lines.append(line)
+        return lines
+
+    _, end = bounds
+    lines.insert(end, line)
+    return lines
+
+
+def append_task(text: str, project: str = None) -> str:
+    """Append one task. The single write path -- typed and voice both land
+    here."""
+    project = project or INBOX
     tid = new_id()
+    entry = f"- [ ] {text} <!--id:{tid}-->"
+
     with _lock:
-        content = read_file()
-        if content and not content.endswith("\n"):
-            content += "\n"
-        content += f"- [ ] {text} <!--id:{tid}-->\n"
-        write_file(content)
+        lines = read_file().splitlines()
+        insert_line(lines, project, entry)
+        write_file("\n".join(lines) + "\n")
     return tid
 
 
@@ -141,35 +217,90 @@ def authorised() -> bool:
     return secrets.compare_digest(supplied, TASKPAL_TOKEN)
 
 
+def deny():
+    return jsonify(error="unauthorised"), 401
+
+
+# --- views -------------------------------------------------------------
+
+def render(active: str = None):
+    with _lock:
+        content = read_file()
+        tasks, healed = parse(content)
+        if healed != content:
+            write_file(healed)
+            content = healed
+
+    projects = project_list(content, tasks)
+    known = {p["name"] for p in projects}
+    if active is not None and active not in known:
+        active = None  # unknown project -> show everything
+
+    shown = tasks if active is None else [t for t in tasks
+                                          if t["project"] == active]
+
+    return render_template(
+        "index.html",
+        open_tasks=[t for t in shown if not t["done"]],
+        done_tasks=[t for t in shown if t["done"]],
+        projects=projects,
+        active=active,
+        total_open=sum(p["open"] for p in projects),
+        inbox=INBOX,
+        path=TASKPAL_PATH.name,
+    )
+
+
+@app.route("/")
+def index():
+    return render(None)
+
+
+@app.route("/p/<path:project>")
+def project_view(project):
+    return render(unquote(project))
+
+
+def back_to(project: str = None):
+    if project:
+        return redirect(url_for("project_view", project=quote(project)))
+    return redirect(url_for("index"))
+
+
+# --- write routes ------------------------------------------------------
+
 @app.route("/task", methods=["POST"])
 def add_task():
     """Typed input. Stored verbatim -- no parsing, no LLM, no surprises."""
     if not authorised():
-        return jsonify(error="unauthorised"), 401
+        return deny()
 
     payload = request.get_json(silent=True) or {}
     text = (request.form.get("text") or payload.get("text") or "").strip()
+    project = (request.form.get("project")
+               or payload.get("project") or INBOX).strip()
+
     if not text:
-        return redirect(url_for("index"))
+        return back_to(request.form.get("project"))
 
-    append_task(text)
+    append_task(text, project)
 
-    # Browsers get a redirect; API clients get the task back.
     if request.is_json:
-        return jsonify(ok=True, text=text)
-    return redirect(url_for("index"))
+        return jsonify(ok=True, text=text, project=project)
+    return back_to(request.form.get("return_to"))
 
 
 @app.route("/task/voice", methods=["POST"])
 def add_task_voice():
-    """Audio in, task out.
+    """Audio in, task out. Always lands in the inbox -- the Action Button has
+    no UI to pick a project with, and triage is cheaper than dictation
+    friction.
 
     Send the recording as multipart form-data under `file`. Responds with the
-    transcript so the caller can show you what actually landed -- a silent
-    success you can't verify is worse than a visible failure.
+    transcript so the caller can show you what actually landed.
     """
     if not authorised():
-        return jsonify(error="unauthorised"), 401
+        return deny()
 
     if not TRANSCRIBE_KEY:
         return jsonify(error="No OPENAI_API_KEY configured"), 503
@@ -192,8 +323,8 @@ def add_task_voice():
         resp = requests.post(
             TRANSCRIBE_URL,
             headers={"Authorization": f"Bearer {TRANSCRIBE_KEY}"},
-            files={"file": (audio.filename, blob, audio.mimetype
-                            or "application/octet-stream")},
+            files={"file": (audio.filename, blob,
+                            audio.mimetype or "application/octet-stream")},
             data=data,
             timeout=60,
         )
@@ -212,14 +343,60 @@ def add_task_voice():
     if not text:
         return jsonify(error="Nothing recognised in that recording"), 422
 
-    append_task(text)
-    return jsonify(ok=True, text=text)
+    append_task(text, INBOX)
+    return jsonify(ok=True, text=text, project=INBOX)
+
+
+@app.route("/move/<task_id>", methods=["POST"])
+def move(task_id):
+    """Pull a task out of its section and drop it at the end of another."""
+    if not authorised():
+        return deny()
+
+    target = (request.form.get("project") or "").strip()
+    if not target:
+        return back_to(request.form.get("return_to"))
+
+    with _lock:
+        lines = read_file().splitlines()
+        entry = None
+        for i, line in enumerate(lines):
+            m = TASK_RE.match(line)
+            if m and m.group("id") == task_id:
+                entry = lines.pop(i)
+                break
+        if entry is not None:
+            insert_line(lines, target, entry.strip())
+            write_file("\n".join(lines) + "\n")
+
+    return back_to(request.form.get("return_to"))
+
+
+@app.route("/project", methods=["POST"])
+def add_project():
+    if not authorised():
+        return deny()
+
+    name = (request.form.get("name") or "").strip().lstrip("#").strip()
+    if not name:
+        return back_to(None)
+
+    with _lock:
+        lines = read_file().splitlines()
+        if section_bounds(lines, name) is None:
+            if lines and lines[-1].strip():
+                lines.append("")
+            lines.append(f"## {name}")
+            lines.append("")
+            write_file("\n".join(lines) + "\n")
+
+    return back_to(name)
 
 
 @app.route("/toggle/<task_id>", methods=["POST"])
 def toggle(task_id):
     if not authorised():
-        return jsonify(error="unauthorised"), 401
+        return deny()
 
     with _lock:
         lines = read_file().splitlines()
@@ -232,39 +409,49 @@ def toggle(task_id):
                 break
         write_file("\n".join(lines) + "\n")
 
-    return redirect(url_for("index"))
+    return back_to(request.form.get("return_to"))
 
 
 @app.route("/delete/<task_id>", methods=["POST"])
 def delete(task_id):
     if not authorised():
-        return jsonify(error="unauthorised"), 401
+        return deny()
 
     with _lock:
         lines = read_file().splitlines()
-        kept = [
-            ln for ln in lines
-            if not ((m := TASK_RE.match(ln)) and m.group("id") == task_id)
-        ]
+        kept = [ln for ln in lines
+                if not ((m := TASK_RE.match(ln)) and m.group("id") == task_id)]
         write_file("\n".join(kept) + "\n")
 
-    return redirect(url_for("index"))
+    return back_to(request.form.get("return_to"))
 
 
 @app.route("/clear-done", methods=["POST"])
 def clear_done():
+    """Clears completed tasks in the current view only, so clearing Work
+    can't wipe finished items you were keeping under Home."""
     if not authorised():
-        return jsonify(error="unauthorised"), 401
+        return deny()
+
+    scope = (request.form.get("return_to") or "").strip()
 
     with _lock:
-        lines = read_file().splitlines()
-        kept = [
-            ln for ln in lines
-            if not ((m := TASK_RE.match(ln)) and m.group("mark").lower() == "x")
-        ]
+        lines, kept, current = read_file().splitlines(), [], INBOX
+        for line in lines:
+            h = HEADER_RE.match(line)
+            if h:
+                current = h.group("name")
+                kept.append(line)
+                continue
+            m = TASK_RE.match(line)
+            done = m and m.group("mark").lower() == "x"
+            in_scope = (not scope) or current == scope
+            if done and in_scope:
+                continue
+            kept.append(line)
         write_file("\n".join(kept) + "\n")
 
-    return redirect(url_for("index"))
+    return back_to(scope or None)
 
 
 @app.route("/edit", methods=["GET", "POST"])
@@ -273,6 +460,8 @@ def edit():
     ensure_file()
 
     if request.method == "POST":
+        if not authorised():
+            return deny()
         seen_mtime = float(request.form.get("mtime", 0))
         with _lock:
             current_mtime = TASKPAL_PATH.stat().st_mtime
