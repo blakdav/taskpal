@@ -180,6 +180,42 @@ def section_bounds(lines, project: str):
     return start, end
 
 
+def split_sections(lines):
+    """(preamble, [(name, body_lines), ...]).
+
+    Preamble is everything above the first `##` -- the H1, notes, whatever
+    you keep at the top of the file. Reordering must never disturb it.
+    """
+    preamble, sections = [], []
+    for line in lines:
+        h = HEADER_RE.match(line)
+        if h:
+            sections.append([h.group("name"), []])
+        elif sections:
+            sections[-1][1].append(line)
+        else:
+            preamble.append(line)
+    return preamble, sections
+
+
+def join_sections(preamble, sections):
+    """Rebuild the file, normalising to one blank line between sections."""
+    out = list(preamble)
+    while out and not out[-1].strip():
+        out.pop()
+
+    for name, body in sections:
+        trimmed = list(body)
+        while trimmed and not trimmed[-1].strip():
+            trimmed.pop()
+        if out:
+            out.append("")
+        out.append(f"## {name}")
+        out.extend(trimmed)
+
+    return "\n".join(out) + "\n"
+
+
 def insert_line(lines, project: str, line: str):
     """Put `line` at the end of a project's section, creating it if needed."""
     bounds = section_bounds(lines, project)
@@ -251,8 +287,22 @@ def render(active: str = None):
     )
 
 
+ALL = "*"  # sentinel in return_to fields meaning "the unfiltered view"
+
+
 @app.route("/")
 def index():
+    """Opens on whichever project sits at the top of the file. Reorder the
+    sidebar and you've changed what greets you."""
+    with _lock:
+        content = read_file()
+    tasks, _ = parse(content)
+    projects = project_list(content, tasks)
+    return render(projects[0]["name"] if projects else None)
+
+
+@app.route("/all")
+def all_view():
     return render(None)
 
 
@@ -262,6 +312,8 @@ def project_view(project):
 
 
 def back_to(project: str = None):
+    if project == ALL:
+        return redirect(url_for("all_view"))
     if project:
         return redirect(url_for("project_view", project=quote(project)))
     return redirect(url_for("index"))
@@ -379,7 +431,7 @@ def add_project():
 
     name = (request.form.get("name") or "").strip().lstrip("#").strip()
     if not name:
-        return back_to(None)
+        return back_to(request.form.get("return_to"))
 
     with _lock:
         lines = read_file().splitlines()
@@ -391,6 +443,29 @@ def add_project():
             write_file("\n".join(lines) + "\n")
 
     return back_to(name)
+
+
+@app.route("/project/<path:project>/<direction>", methods=["POST"])
+def reorder_project(project, direction):
+    """Swap a whole `## section` with its neighbour -- header, tasks, and any
+    notes underneath move together."""
+    if not authorised():
+        return deny()
+
+    project = unquote(project)
+    step = -1 if direction == "up" else 1 if direction == "down" else 0
+    if not step:
+        return back_to(project)
+
+    with _lock:
+        preamble, sections = split_sections(read_file().splitlines())
+        idx = next((i for i, (n, _) in enumerate(sections) if n == project), None)
+        target = None if idx is None else idx + step
+        if idx is not None and target is not None and 0 <= target < len(sections):
+            sections[idx], sections[target] = sections[target], sections[idx]
+            write_file(join_sections(preamble, sections))
+
+    return back_to(project)
 
 
 @app.route("/toggle/<task_id>", methods=["POST"])
@@ -434,6 +509,8 @@ def clear_done():
         return deny()
 
     scope = (request.form.get("return_to") or "").strip()
+    if scope == ALL:
+        scope = ""
 
     with _lock:
         lines, kept, current = read_file().splitlines(), [], INBOX
@@ -451,7 +528,7 @@ def clear_done():
             kept.append(line)
         write_file("\n".join(kept) + "\n")
 
-    return back_to(scope or None)
+    return back_to(request.form.get("return_to"))
 
 
 @app.route("/edit", methods=["GET", "POST"])
