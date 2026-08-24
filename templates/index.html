@@ -45,17 +45,17 @@
     background: var(--paper);
     color: var(--ink);
     font-family: var(--sans);
-    font-size: 15px;
-    line-height: 1.5;
+    font-size: 16.5px;
+    line-height: 1.55;
     -webkit-font-smoothing: antialiased;
   }
 
   .shell {
-    max-width: 48rem;
+    max-width: 50rem;
     margin: 0 auto;
     padding: 3.5rem 1.25rem 6rem;
     display: grid;
-    grid-template-columns: 10.5rem 1fr;
+    grid-template-columns: 11.5rem 1fr;
     gap: 2.5rem;
     align-items: start;
   }
@@ -82,7 +82,7 @@
     border-radius: 3px;
     color: var(--muted);
     text-decoration: none;
-    font-size: 0.85rem;
+    font-size: 0.9rem;
     border-left: 2px solid transparent;
     transition: color 120ms ease, background 120ms ease;
   }
@@ -95,7 +95,7 @@
   }
   nav a .n {
     font-family: var(--mono);
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     color: var(--muted);
   }
   nav a.on .n { color: var(--accent); }
@@ -106,16 +106,22 @@
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
 
-  .ord { display: flex; flex-direction: column; opacity: 0; transition: opacity 120ms ease; }
+  .ord { display: flex; flex-direction: column; gap: 1px; opacity: 0.25; transition: opacity 120ms ease; }
   nav .row:hover .ord, .ord:focus-within { opacity: 1; }
   .ord button {
+    display: flex; align-items: center; justify-content: center;
+    width: 1.4rem; height: 1.05rem;
     border: 0; background: none; cursor: pointer;
-    color: var(--muted); font-size: 0.6rem; line-height: 0.9;
-    padding: 0 0.15rem;
+    color: var(--muted); font-size: 0.8rem; line-height: 1;
+    border-radius: 2px;
+    padding: 0;
   }
+  .ord button:hover:not(:disabled) { background: var(--rule); }
   .ord button:hover:not(:disabled) { color: var(--ink); }
   .ord button:disabled { color: var(--rule); cursor: default; }
   .ord button:focus-visible { outline: 1px solid var(--accent); }
+
+  .all-row { margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--rule); }
 
   nav hr { border: 0; border-top: 1px solid var(--rule); margin: 0.6rem 0.5rem; }
 
@@ -123,7 +129,7 @@
     width: 100%;
     padding: 0.3rem 0.5rem;
     font-family: var(--mono);
-    font-size: 0.78rem;
+    font-size: 0.85rem;
     color: var(--ink);
     background: transparent;
     border: 1px dashed var(--rule);
@@ -139,7 +145,7 @@
     width: 100%;
     padding: 0.9rem 1rem 0.9rem 2.1rem;
     font-family: var(--mono);
-    font-size: 0.95rem;
+    font-size: 1rem;
     color: var(--ink);
     background: var(--surface);
     border: 1px solid var(--rule);
@@ -200,7 +206,7 @@
   .box:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .box.checked { background: var(--accent); border-color: var(--accent); }
 
-  .label { flex: 1; font-family: var(--mono); font-size: 0.9rem; word-break: break-word; }
+  .label { flex: 1; font-family: var(--mono); font-size: 0.95rem; word-break: break-word; }
   li.done .label { color: var(--muted); text-decoration: line-through; }
 
   /* project chip shown only in the All view, where it's the only way to
@@ -234,6 +240,28 @@
   select.mover:hover { color: var(--ink); border-color: var(--rule); }
   select.mover option { background: var(--surface); color: var(--ink); }
 
+  .act {
+    border: 1px solid var(--rule);
+    background: none;
+    color: var(--muted);
+    font: inherit; font-size: 0.72rem;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 0.15rem 0.6rem;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: color 120ms ease, border-color 120ms ease;
+  }
+  .act:hover { color: var(--ink); border-color: var(--muted); }
+  .act:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .when {
+    flex: none;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-top: 0.15rem;
+  }
+
   .kill {
     flex: none;
     border: 0; background: none;
@@ -248,7 +276,7 @@
 
   .empty {
     font-family: var(--mono);
-    font-size: 0.85rem;
+    font-size: 0.9rem;
     color: var(--muted);
     padding: 1.25rem 0;
     border-top: 1px solid var(--rule);
@@ -273,7 +301,7 @@
     margin-top: 3rem;
     padding-top: 1rem;
     border-top: 1px solid var(--rule);
-    font-size: 0.75rem;
+    font-size: 0.8rem;
     color: var(--muted);
     display: flex;
     gap: 1.25rem;
@@ -338,11 +366,6 @@
   <nav>
     <div class="nav-label">Projects</div>
     <div class="rail">
-      <div class="row">
-        <a href="{{ url_for('all_view') }}" class="{{ 'on' if active is none }}">
-          <span>All</span><span class="n">{{ total_open }}</span>
-        </a>
-      </div>
       {% for p in projects %}
       <div class="row">
         <a href="{{ url_for('project_view', project=p.name) }}"
@@ -361,6 +384,19 @@
         </span>
       </div>
       {% endfor %}
+      <div class="row all-row">
+        <a href="{{ url_for('all_view') }}"
+           class="{{ 'on' if active is none and not archive }}">
+          <span>All</span><span class="n">{{ total_open }}</span>
+        </a>
+      </div>
+      {% if archived_count %}
+      <div class="row">
+        <a href="{{ url_for('archive_view') }}" class="{{ 'on' if archive }}">
+          <span>Archive</span><span class="n">{{ archived_count }}</span>
+        </a>
+      </div>
+      {% endif %}
     </div>
     <hr>
     <form method="post" action="{{ url_for('add_project') }}">
@@ -369,12 +405,14 @@
   </nav>
 
   <main>
+    {% if not archive %}
     <form class="capture" method="post" action="{{ url_for('add_task') }}">
       <input id="add" name="text" autocomplete="off"
              placeholder="add to {{ active or inbox }}, press enter">
       <input type="hidden" name="project" value="{{ active or inbox }}">
       <input type="hidden" name="return_to" value="{{ active or '*' }}">
     </form>
+    {% endif %}
 
     {% if open_tasks %}
     <ul class="tasks">
@@ -404,16 +442,18 @@
       {% endfor %}
     </ul>
     {% else %}
-    <p class="empty">Nothing open{{ ' in ' ~ active if active }}. Type above to add.</p>
+    <p class="empty">{% if archive %}Nothing archived yet.{% else %}Nothing open{{ ' in ' ~ active if active }}. Type above to add.{% endif %}</p>
     {% endif %}
 
     {% if done_tasks %}
     <div class="section-label">
-      <span>Done &middot; {{ done_tasks|length }}</span>
-      <form method="post" action="{{ url_for('clear_done') }}">
+      <span>{{ 'Archived' if archive else 'Done' }} &middot; {{ done_tasks|length }}</span>
+      {% if not archive %}
+      <form method="post" action="{{ url_for('archive_done') }}">
         <input type="hidden" name="return_to" value="{{ active or '*' }}">
-        <button class="kill" type="submit" style="color:var(--muted)">clear</button>
+        <button class="act" type="submit">archive</button>
       </form>
+      {% endif %}
     </div>
     <ul class="tasks">
       {% for t in done_tasks %}
@@ -423,7 +463,8 @@
           <button class="box checked" type="submit" aria-label="Reopen {{ t.text }}">&check;</button>
         </form>
         <span class="label">{{ t.text }}</span>
-        {% if active is none %}<span class="tag">{{ t.project }}</span>{% endif %}
+        {% if t.done_on %}<span class="when">{{ t.done_on }}</span>{% endif %}
+        {% if active is none and not archive %}<span class="tag">{{ t.project }}</span>{% endif %}
         <form method="post" action="{{ url_for('delete', task_id=t.id) }}">
           <input type="hidden" name="return_to" value="{{ active or '*' }}">
           <button class="kill" type="submit" aria-label="Delete {{ t.text }}">&times;</button>
