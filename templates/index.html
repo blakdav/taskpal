@@ -106,6 +106,8 @@
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
 
+  .ord-gap { flex: none; width: 1.9rem; }
+
   .ord { display: flex; flex-direction: column; gap: 2px; opacity: 0.35; transition: opacity 120ms ease; }
   nav .row:hover .ord, .ord:focus-within { opacity: 1; }
   .ord button {
@@ -343,7 +345,7 @@
     }
     nav .rail::-webkit-scrollbar { display: none; }
     nav .row { flex: none; }
-    .ord { display: none; }
+    .ord, .ord-gap { display: none; }
     nav a {
       flex: none;
       border-left: 0;
@@ -372,7 +374,7 @@
            class="{{ 'on' if active == p.name }}">
           <span>{{ p.name }}</span><span class="n">{{ p.open or '' }}</span>
         </a>
-        {% if p.name != inbox %}
+        {% if p.name == inbox %}<span class="ord-gap"></span>{% else %}
         <span class="ord">
           <form method="post" action="{{ url_for('reorder_project', project=p.name, direction='up') }}">
             <button type="submit" aria-label="Move {{ p.name }} up"
@@ -391,12 +393,14 @@
            class="{{ 'on' if active is none and not archive }}">
           <span>All</span><span class="n">{{ total_open }}</span>
         </a>
+        <span class="ord-gap"></span>
       </div>
       {% if archived_count %}
       <div class="row">
         <a href="{{ url_for('archive_view') }}" class="{{ 'on' if archive }}">
           <span>Archive</span>
         </a>
+        <span class="ord-gap"></span>
       </div>
       {% endif %}
     </div>
