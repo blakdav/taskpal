@@ -293,15 +293,28 @@ def hoist_inbox(content: str) -> str:
     return join_sections(preamble, sections)
 
 
+def sink_archive(content: str) -> str:
+    """Move the Archive section to the end of the file.
+
+    Archive is a graveyard, not a project -- it belongs below everything you
+    might actually work on. New projects get appended at the end, and
+    reordering shuffles sections, so without this it drifts upwards.
+    """
+    preamble, sections = split_sections(content.splitlines())
+    idx = next((i for i, (n, _) in enumerate(sections) if n == ARCHIVE), None)
+    if idx is None or idx == len(sections) - 1:
+        return content
+    sections.append(sections.pop(idx))
+    return join_sections(preamble, sections)
+
+
 def render(active: str = None, archive: bool = False):
     with _lock:
         content = read_file()
         tasks, healed = parse(content)
         if healed != content:
             content = healed
-        hoisted = hoist_inbox(content)
-        if hoisted != content:
-            content = hoisted
+        content = sink_archive(hoist_inbox(content))
         if content != read_file():
             write_file(content)
             tasks, _ = parse(content)
@@ -482,13 +495,12 @@ def add_project():
         return back_to(request.form.get("return_to"))
 
     with _lock:
-        lines = read_file().splitlines()
-        if section_bounds(lines, name) is None:
-            if lines and lines[-1].strip():
-                lines.append("")
-            lines.append(f"## {name}")
-            lines.append("")
-            write_file("\n".join(lines) + "\n")
+        preamble, sections = split_sections(read_file().splitlines())
+        if not any(n == name for n, _ in sections):
+            at = next((i for i, (n, _) in enumerate(sections) if n == ARCHIVE),
+                      len(sections))
+            sections.insert(at, [name, []])
+            write_file(join_sections(preamble, sections))
 
     return back_to(name)
 
@@ -505,12 +517,22 @@ def reorder_project(project, direction):
     if not step:
         return back_to(project)
 
+    if project in (INBOX, ARCHIVE):
+        return back_to(project)
+
     with _lock:
         preamble, sections = split_sections(read_file().splitlines())
-        idx = next((i for i, (n, _) in enumerate(sections) if n == project), None)
-        target = None if idx is None else idx + step
-        if idx is not None and target is not None and 0 <= target < len(sections):
-            sections[idx], sections[target] = sections[target], sections[idx]
+
+        # Inbox is pinned at the top and Archive at the bottom, so neither is
+        # a valid neighbour to swap with.
+        movable = [i for i, (n, _) in enumerate(sections)
+                   if n not in (INBOX, ARCHIVE)]
+        pos = next((k for k, i in enumerate(movable)
+                    if sections[i][0] == project), None)
+
+        if pos is not None and 0 <= pos + step < len(movable):
+            a, b = movable[pos], movable[pos + step]
+            sections[a], sections[b] = sections[b], sections[a]
             write_file(join_sections(preamble, sections))
 
     return back_to(project)
