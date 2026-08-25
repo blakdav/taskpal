@@ -332,7 +332,8 @@ def render(active: str = None, archive: bool = False):
     )
 
 
-ALL = "*"  # sentinel in return_to fields meaning "the unfiltered view"
+ALL = "*"        # sentinel in return_to meaning "the unfiltered view"
+ARCHIVED = "@"   # ... and "the archive view"
 
 
 @app.route("/")
@@ -357,6 +358,8 @@ def project_view(project):
 
 
 def back_to(project: str = None):
+    if project == ARCHIVED:
+        return redirect(url_for("archive_view"))
     if project == ALL:
         return redirect(url_for("all_view"))
     if project:
@@ -559,7 +562,7 @@ def archive_done():
         return deny()
 
     scope = (request.form.get("return_to") or "").strip()
-    if scope == ALL:
+    if scope in (ALL, ARCHIVED):
         scope = ""
 
     stamp = date.today().isoformat()
