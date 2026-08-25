@@ -412,22 +412,27 @@
       <input id="add" name="text" autocomplete="off"
              placeholder="add to {{ active or inbox }}, press enter">
       <input type="hidden" name="project" value="{{ active or inbox }}">
-      <input type="hidden" name="return_to" value="{{ active or '*' }}">
+      <input type="hidden" name="return_to" value="{{ '@' if archive else (active or '*') }}">
     </form>
     {% endif %}
 
+    {% if not open_tasks and not done_tasks %}
+    <p class="empty">{% if archive %}Nothing archived yet.{% else %}Nothing open{{ ' in ' ~ active if active }}. Type above to add.{% endif %}</p>
+    {% endif %}
+
     {% if open_tasks %}
+    {% if archive %}<div class="section-label"><span>Reopened &middot; {{ open_tasks|length }}</span></div>{% endif %}
     <ul class="tasks">
       {% for t in open_tasks %}
       <li>
         <form method="post" action="{{ url_for('toggle', task_id=t.id) }}">
-          <input type="hidden" name="return_to" value="{{ active or '*' }}">
+          <input type="hidden" name="return_to" value="{{ '@' if archive else (active or '*') }}">
           <button class="box" type="submit" aria-label="Complete {{ t.text }}"></button>
         </form>
         <span class="label">{{ t.text }}</span>
         {% if active is none %}<span class="tag">{{ t.project }}</span>{% endif %}
         <form method="post" action="{{ url_for('move', task_id=t.id) }}">
-          <input type="hidden" name="return_to" value="{{ active or '*' }}">
+          <input type="hidden" name="return_to" value="{{ '@' if archive else (active or '*') }}">
           <select class="mover" name="project" aria-label="Move {{ t.text }}"
                   onchange="this.form.submit()">
             <option value="" selected>&rarr;</option>
@@ -437,14 +442,12 @@
           </select>
         </form>
         <form method="post" action="{{ url_for('delete', task_id=t.id) }}">
-          <input type="hidden" name="return_to" value="{{ active or '*' }}">
+          <input type="hidden" name="return_to" value="{{ '@' if archive else (active or '*') }}">
           <button class="kill" type="submit" aria-label="Delete {{ t.text }}">&times;</button>
         </form>
       </li>
       {% endfor %}
     </ul>
-    {% else %}
-    <p class="empty">{% if archive %}Nothing archived yet.{% else %}Nothing open{{ ' in ' ~ active if active }}. Type above to add.{% endif %}</p>
     {% endif %}
 
     {% if done_tasks %}
@@ -452,7 +455,7 @@
       <span>{{ 'Archived' if archive else 'Done' }} &middot; {{ done_tasks|length }}</span>
       {% if not archive %}
       <form method="post" action="{{ url_for('archive_done') }}">
-        <input type="hidden" name="return_to" value="{{ active or '*' }}">
+        <input type="hidden" name="return_to" value="{{ '@' if archive else (active or '*') }}">
         <button class="act" type="submit">archive</button>
       </form>
       {% endif %}
@@ -461,14 +464,14 @@
       {% for t in done_tasks %}
       <li class="done">
         <form method="post" action="{{ url_for('toggle', task_id=t.id) }}">
-          <input type="hidden" name="return_to" value="{{ active or '*' }}">
+          <input type="hidden" name="return_to" value="{{ '@' if archive else (active or '*') }}">
           <button class="box checked" type="submit" aria-label="Reopen {{ t.text }}">&check;</button>
         </form>
         <span class="label">{{ t.text }}</span>
         {% if t.done_on %}<span class="when">{{ t.done_on }}</span>{% endif %}
         {% if active is none and not archive %}<span class="tag">{{ t.project }}</span>{% endif %}
         <form method="post" action="{{ url_for('delete', task_id=t.id) }}">
-          <input type="hidden" name="return_to" value="{{ active or '*' }}">
+          <input type="hidden" name="return_to" value="{{ '@' if archive else (active or '*') }}">
           <button class="kill" type="submit" aria-label="Delete {{ t.text }}">&times;</button>
         </form>
       </li>
