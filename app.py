@@ -624,6 +624,15 @@ def archive_done():
     return back_to(request.form.get("return_to"))
 
 
+@app.route("/state")
+def state():
+    """Cheap change check: the file's mtime. The page polls this and only
+    pulls new markup when the number moves, so a list sitting open all day
+    costs a few dozen bytes a minute."""
+    ensure_file()
+    return jsonify(mtime=TASKPAL_PATH.stat().st_mtime)
+
+
 @app.route("/archive")
 def archive_view():
     return render(None, archive=True)
