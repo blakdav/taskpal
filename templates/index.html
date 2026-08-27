@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="taskpal">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>taskpal</title>
 <script>
   try {
@@ -18,24 +21,24 @@
 <style>
   /* Dark is the default. Light is opt-in via [data-theme="light"]. */
   :root {
-    --paper:   #1A1817;
-    --surface: #232120;
-    --ink:     #E8E4E0;
-    --muted:   #8E8884;
-    --accent:  #B85C38;
-    --on-accent: #1A120E;
-    --rule:    #302D2B;
+    --paper:   #171A17;
+    --surface: #1E221E;
+    --ink:     #E4E6DF;
+    --muted:   #878C81;
+    --accent:  #7DA882;
+    --on-accent: #14170F;
+    --rule:    #2C312C;
     --sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
     --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
   }
   :root[data-theme="light"] {
-    --paper:   #F2F0ED;
-    --surface: #FBFAF8;
-    --ink:     #1C1917;
-    --muted:   #78726D;
-    --accent:  #8A3A1E;
-    --on-accent: #FBFAF8;
-    --rule:    #E1DDD8;
+    --paper:   #F0F1EC;
+    --surface: #FAFAF8;
+    --ink:     #191C18;
+    --muted:   #757A70;
+    --accent:  #3D5A45;
+    --on-accent: #FAFAF8;
+    --rule:    #DFE0D8;
   }
 
   * { box-sizing: border-box; }
@@ -346,6 +349,17 @@
     nav .rail::-webkit-scrollbar { display: none; }
     nav .row { flex: none; }
     .ord, .ord-gap { display: none; }
+
+    /* Fingers need more room than a cursor does. */
+    ul.tasks li { padding: 0.7rem 0; gap: 0.85rem; }
+    .box { width: 1.4rem; height: 1.4rem; font-size: 0.95rem; margin-top: 0; }
+    .label { font-size: 1rem; }
+    .kill { padding: 0 0.5rem; font-size: 1.15rem; }
+    select.mover { font-size: 0.85rem; padding: 0.25rem; }
+    .capture input { padding: 1rem 1rem 1rem 2.1rem; font-size: 1.05rem; }
+    .act { padding: 0.4rem 0.9rem; font-size: 0.8rem; }
+    nav a { padding: 0.5rem 0.7rem; }
+    main { padding-bottom: 4rem; }
     nav a {
       flex: none;
       border-left: 0;
@@ -357,6 +371,37 @@
     #newproj { margin-top: 0.5rem; }
     select.mover { opacity: 1; }
     .kill { color: var(--muted); }
+  }
+
+  /* Floating refresh, touch only. Standalone web apps have no pull-to-refresh
+     and no address bar, so without this there's no way to re-check whether a
+     dictated task landed. */
+  .fab { display: none; }
+
+  body.working { cursor: progress; }
+  body.working .shell { opacity: 0.6; transition: opacity 90ms ease; }
+
+  @media (max-width: 40rem) {
+    .fab {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: fixed;
+      right: 1rem;
+      bottom: calc(1rem + env(safe-area-inset-bottom));
+      width: 3rem;
+      height: 3rem;
+      border-radius: 50%;
+      border: 1px solid var(--rule);
+      background: var(--surface);
+      color: var(--ink);
+      font-size: 1.4rem;
+      line-height: 1;
+      cursor: pointer;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.35);
+      z-index: 10;
+    }
+    .fab:active { background: var(--rule); }
   }
 
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
@@ -438,7 +483,7 @@
         <form method="post" action="{{ url_for('move', task_id=t.id) }}">
           <input type="hidden" name="return_to" value="{{ '@' if archive else (active or '*') }}">
           <select class="mover" name="project" aria-label="Move {{ t.text }}"
-                  onchange="this.form.submit()">
+                  onchange="this.form.requestSubmit()">
             <option value="" selected>&rarr;</option>
             {% for p in projects if p.name != t.project %}
             <option value="{{ p.name }}">{{ p.name }}</option>
@@ -488,6 +533,7 @@
 {% endfor %}</pre>
 
     <footer>
+      <button type="button" class="refresh"><kbd>r</kbd> refresh</button>
       <span><kbd>/</kbd> focus</span>
       <span><kbd>1-9</kbd> project</span>
       <button type="button" id="src-toggle"><kbd>s</kbd> source</button>
@@ -497,56 +543,157 @@
     </footer>
   </main>
 
+  <button type="button" class="refresh fab" aria-label="Refresh">&#8635;</button>
 </div>
 
 <script>
-  const input = document.getElementById('add');
-  const root  = document.documentElement;
-  const name  = document.getElementById('theme-name');
-  const meta  = document.getElementById('tc');
+  const root   = document.documentElement;
   const COLORS = { dark: '#171A17', light: '#F0F1EC' };
+
+  const shell   = () => document.querySelector('.shell');
+  const capture = () => document.getElementById('add');
 
   function paintLabel() {
     const isLight = root.dataset.theme === 'light';
-    name.textContent = isLight ? 'dark' : 'light';
-    meta.setAttribute('content', isLight ? COLORS.light : COLORS.dark);
+    const label = document.getElementById('theme-name');
+    if (label) label.textContent = isLight ? 'dark' : 'light';
+    const meta = document.getElementById('tc');
+    if (meta) meta.setAttribute('content', isLight ? COLORS.light : COLORS.dark);
   }
+
   function toggleTheme() {
     const isLight = root.dataset.theme === 'light';
     if (isLight) { delete root.dataset.theme; } else { root.dataset.theme = 'light'; }
     try { localStorage.setItem('taskpal-theme', isLight ? 'dark' : 'light'); } catch (e) {}
     paintLabel();
   }
-  paintLabel();
 
-  document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
-  document.getElementById('src-toggle').addEventListener('click', () => {
-    document.body.classList.toggle('show-source');
+  // --- in-place updates -------------------------------------------------
+  // Checking a box used to reload the page, which threw you back to the top
+  // of a long list. Instead we post in the background and swap the markup,
+  // holding scroll position where it was.
+  let busy = false;
+  let known = null;
+
+  async function swap(url, opts = {}, keepScroll = true) {
+    if (busy) return;
+    busy = true;
+    document.body.classList.add('working');
+    const y = window.scrollY;
+    try {
+      const res  = await fetch(url, { ...opts, headers: { 'X-Taskpal': '1' } });
+      const doc  = new DOMParser().parseFromString(await res.text(), 'text/html');
+      const next = doc.querySelector('.shell');
+      if (!next) { location.reload(); return; }
+
+      shell().replaceWith(next);
+      if (res.url && res.url !== location.href) {
+        history.replaceState(null, '', res.url);
+      }
+      paintLabel();
+      if (keepScroll) window.scrollTo(0, y);
+      fetch('/state', { cache: 'no-store' })
+        .then(r => r.json()).then(d => { known = d.mtime; })
+        .catch(() => {});
+    } catch (e) {
+      location.reload();
+    } finally {
+      busy = false;
+      document.body.classList.remove('working');
+    }
+  }
+
+  const refresh = () => swap(location.href);
+
+  // Delegated, so it survives every swap without rebinding.
+  document.addEventListener('submit', (e) => {
+    const form = e.target;
+    if (!form.matches('form')) return;
+    e.preventDefault();
+
+    const adding = form.classList.contains('capture');
+    swap(form.action, { method: 'POST', body: new FormData(form) })
+      .then(() => { if (adding) capture()?.focus(); });
   });
 
-  const links = Array.from(document.querySelectorAll('nav .rail .row > a'));
+  document.addEventListener('click', (e) => {
+    const t = e.target.closest('#theme-toggle, #src-toggle, .refresh');
+    if (!t) return;
+    if (t.id === 'theme-toggle') toggleTheme();
+    else if (t.id === 'src-toggle') document.body.classList.toggle('show-source');
+    else refresh();
+  });
 
   document.addEventListener('keydown', (e) => {
     if (e.target.matches('input, textarea, select')) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
 
-    if (e.key === '/') { e.preventDefault(); input.focus(); }
+    if (e.key === '/') { e.preventDefault(); capture()?.focus(); }
     if (e.key === 's') { document.body.classList.toggle('show-source'); }
     if (e.key === 't') { toggleTheme(); }
+    if (e.key === 'r') { e.preventDefault(); refresh(); }
 
-    // 1 = All, 2..9 = the projects in sidebar order
     if (/^[1-9]$/.test(e.key)) {
+      const links = document.querySelectorAll('nav .rail .row > a');
       const target = links[Number(e.key) - 1];
       if (target) { e.preventDefault(); window.location = target.href; }
     }
   });
 
-  // Coming back to a tab that's been sitting open? Get fresh state.
-  let hidden = false;
+  // Standalone web apps don't reload when you come back to them, so a
+  // dictated task added from the Action Button would otherwise never appear.
+  // iOS fires these inconsistently -- a suspended standalone app is often
+  // restored from a snapshot with no visibilitychange at all. So listen for
+  // three different "you're back" signals and debounce them into one refresh.
+  let lastWake = 0;
+
+  function resumed() {
+    const now = Date.now();
+    if (now - lastWake < 1200) return;   // the events overlap; fire once
+    lastWake = now;
+    wake();
+    refresh();
+  }
+
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) { hidden = true; }
-    else if (hidden) { window.location.reload(); }
+    if (document.hidden) sleep();
+    else resumed();
   });
+
+  // bfcache restore -- the usual path back into a standalone web app
+  window.addEventListener('pageshow', (e) => { if (e.persisted) resumed(); });
+
+  // last resort, and the one that actually fires on older iOS
+  window.addEventListener('focus', resumed);
+
+  // --- poll for changes made elsewhere --------------------------------
+  // The page can't know when you dictate something -- the Shortcut talks to
+  // the server, not to this tab. So ask the server whether the file moved.
+  // Only the mtime comes back; markup is fetched only when it actually has.
+  let timer = null;
+
+  async function tick() {
+    if (document.hidden || busy) return;
+
+    // Never yank the page out from under a half-typed task.
+    const box = capture();
+    if (box && (box.value.trim() || document.activeElement === box)) return;
+
+    try {
+      const res = await fetch('/state', { cache: 'no-store' });
+      const { mtime } = await res.json();
+      if (known === null) { known = mtime; return; }
+      if (mtime !== known) { known = mtime; await swap(location.href); }
+    } catch (e) { /* offline or asleep -- try again next tick */ }
+  }
+
+  function wake() { if (!timer) timer = setInterval(tick, 5000); }
+  function sleep() { clearInterval(timer); timer = null; }
+
+  wake();
+  tick();
+
+  paintLabel();
 </script>
 </body>
 </html>
